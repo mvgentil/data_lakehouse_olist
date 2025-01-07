@@ -50,13 +50,12 @@ def list_files(path: str) -> List[str]:
 def upload_files_to_bucket(files,s3):
     for file in files:
         try:
-            s3.upload_file(file, BUCKET_NAME, file)
-            print(f"Uploaded {file}")
+            file_name = os.path.basename(file)
+            s3.upload_file(file, BUCKET_NAME, file_name)
+            print(f"Uploaded {file_name}")
         except Exception as e:
-            print(f"Error uploading {file}: {e}")
+            print(f"Error uploading {file_name}: {e}")
 
-def delete_local_files(local_path):
-    pass
 
 def get_files_from_bucket(s3):
     response = s3.list_objects(Bucket=BUCKET_NAME)
