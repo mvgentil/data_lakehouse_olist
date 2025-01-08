@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 import boto3
 import kagglehub
 from typing import List
+import duckdb
+import pandas as pd
 
 load_dotenv()
 
@@ -27,7 +29,7 @@ def connect_to_s3():
     except Exception as e:
         print(e)
 
-def get_files_from_kaggle():
+def get_files_from_kaggle() -> str:
     path = kagglehub.dataset_download("olistbr/brazilian-ecommerce", )
 
     print("Path to dataset files:", path)
@@ -47,25 +49,46 @@ def list_files(path: str) -> List[str]:
         raise
     return files
 
-def upload_files_to_bucket(files,s3):
+def upload_files_to_bucket(files: List[str], s3, bucket_path: str):
     for file in files:
         try:
             file_name = os.path.basename(file)
-            s3.upload_file(file, BUCKET_NAME, file_name)
-            print(f"Uploaded {file_name}")
+            s3_key = f"{bucket_path}/{file_name}"
+            s3.upload_file(file, BUCKET_NAME, s3_key)
+            print(f"Uploaded {file_name} to {BUCKET_NAME}/{s3_key}")
         except Exception as e:
             print(f"Error uploading {file_name}: {e}")
 
 
-def get_files_from_bucket(s3):
-    response = s3.list_objects(Bucket=BUCKET_NAME)
-    if 'Contents' in response:
-        for item in response['Contents']:
-            print(item['Key'])
-            s3.download_file(BUCKET_NAME, item['Key'], item['Key'])
-            print(f"Downloaded {item['Key']}")
-    else:
-        print("No objects found in the bucket.")
+def get_files_from_bucket(s3, local_path: str, bucket_path: str):
+    try:
+        response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=bucket_path)
+        print(response)
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                file_key = obj['Key']
+
+                if file_key == bucket_path or obj['Size'] == 0:
+                    print(f"Skipping {file_key} (folder or empty object)")
+                    continue
+                
+                print(f"Downloading: {file_key}")
+                local_file_path = os.path.join(local_path, file_key)
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                s3.download_file(BUCKET_NAME, file_key, local_file_path)
+                print(f"Downloaded {file_key} to {local_file_path}")
+        else:
+            print("No objects found in the bucket.")
+    except Exception as e:
+        print(f"Error downlaoding objects from bucket: {e}")
+
+def normalize_csv(file_path: str, output_path: str):
+    try:
+        df = pd.read_csv(file_path, encoding='ISO-8859-1')  # Adjust encoding if necessary
+        df.to_parquet(output_path, index=False, encoding='UTF-8')
+        print(f"Normalized {file_path} to {output_path}")
+    except Exception as e:
+        print(f"Error normalizing {file_path}: {e}")
 
 
 if __name__ == "__main__":
@@ -80,4 +103,9 @@ if __name__ == "__main__":
     s3 = connect_to_s3()
 
     # Upload files to S3
-    upload_files_to_bucket(files, s3)
+    upload_files_to_bucket(files, s3, bucket_path="raw")
+
+    # Download files from S3
+    #get_files_from_bucket(s3, "tmp", "raw/")
+
+    files = list_files("tmp/raw")
