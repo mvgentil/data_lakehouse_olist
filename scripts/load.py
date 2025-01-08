@@ -1,9 +1,9 @@
-import psycopg2
 import os
 from dotenv import load_dotenv
-from extract import connect_to_s3, get_files_from_bucket, list_files
-import duckdb
+from database import engine
+from extract import connect_to_s3, list_files
 from typing import List
+from sqlalchemy import text
 import pandas as pd
 
 load_dotenv()
@@ -13,62 +13,63 @@ AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_REGION')
 BUCKET_NAME = os.getenv('BUCKET_NAME')
 
-POSTGRES_HOST = os.getenv('POSTGRES_HOST')
-POSTGRES_DB = os.getenv('POSTGRES_DB')
-POSTGRES_USER = os.getenv('POSTGRES_USER')
-POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
-
-
 # Configurações do S3
 s3 = connect_to_s3()
 
+def file_already_processed(file_name: str, connection) -> bool:
+    query = text("SELECT 1 FROM processed_files WHERE file_name  = :file_name;")
+    result = connection.execute(query, {"file_name": file_name}).fetchone()
+    return result is not None
 
-def file_already_processed(file_name, cursor):
-    query = "SELECT 1 FROM arquivos_processados WHERE nome_arquivo = %s;"
-    cursor.execute(query, (file_name,))
-    return cursor.fetchone() is not None
 
 def process_files():
-    conn = psycopg2.connect(
-        host=POSTGRES_HOST,
-        dbname=POSTGRES_DB,
-        user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD,
-    )
-    cursor = conn.cursor()
+    with engine.begin() as connection:
 
-    # Cria a tabela de controle se não existir
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS arquivos_processados (
-            id SERIAL PRIMARY KEY,
-            nome_arquivo TEXT UNIQUE,
-            data_processamento TIMESTAMP DEFAULT NOW()
-        );
-    """)
-    conn.commit()
+        # List files in the S3 bucket
+        response = s3.list_objects_v2(Bucket=BUCKET_NAME)
+        
+        for obj in response.get("Contents", []):
+            file_name = obj["Key"]
+            if obj["Size"] == 0:
+                print(f"Skipping empty file: {file_name}")
+                continue
 
-    # Lista os arquivos no bucket S3
-    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
+            # Check if the file is already processed
+            if not file_already_processed(file_name, connection):
+                # Ensure the tmp/raw/ directory exists
+                local_file_path = f"tmp/raw/{file_name}"
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
 
-    for obj in response.get("Contents", []):
-        file_name = obj["Key"]
+                if "customers" in file_name:
+                    table_name = "customers"
+                elif "orders" in file_name:
+                    table_name = "orders"
+                elif "order_items" in file_name:
+                    table_name = "order_items"
+                elif "products" in file_name:
+                    table_name = "products"
+                elif "geolocation" in file_name:
+                    table_name = "geolocation"
+                elif "sellers" in file_name:
+                    table_name = "sellers"
+                elif "order_payments" in file_name:
+                    table_name = "order_payments"
+                elif "order_reviews" in file_name:
+                    table_name = "order_reviews"
+                elif "product_category_name_translation" in file_name:
+                    table_name = "product_category_name_translation"
+                else:
+                    table_name = "others"
+                # Download and process the file
+                s3.download_file(BUCKET_NAME, file_name, local_file_path)
+                print(f"Downloaded {file_name}")
 
-        # Verifica se o arquivo já foi processado
-        if not file_already_processed(file_name, cursor):
-            # Baixa e processa o arquivo
-            s3.download_file(BUCKET_NAME, file_name, f"tmp/raw/{file_name}")
-            print(f"Downloaded {file_name}")
+                pd.read_csv(local_file_path).to_sql(table_name, engine, if_exists='append', index=False, schema='bronze')
+                print(f"Inserted {file_name} into {table_name}")
 
-            
-            # Marca o arquivo como processado
-            cursor.execute(
-                "INSERT INTO arquivos_processados (nome_arquivo) VALUES (%s);",
-                (file_name,),
-            )
-            conn.commit()
+                # TODO - Move file from bucket raw to bucket processed
 
-    cursor.close()
-    conn.close()
+        print("File processing completed.")
 
 def transform_csv_to_parquet(files: List[str], s3):
     for file in files:
@@ -127,12 +128,7 @@ def clear_files(path: str):
         os.remove(file)
 
 
-
 if __name__ == "__main__":
 
-    get_files_from_bucket(s3, "tmp", "raw/")
-    
-    raw_files = list_files("tmp/raw/")
-
+    process_files()
     clear_files("tmp/raw")
-
