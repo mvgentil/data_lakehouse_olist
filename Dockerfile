@@ -21,7 +21,7 @@ WORKDIR /app
 COPY . /app
 
 # Etapa 4: Instalação de dependências
-# Instala o Poetry para gerenciar pacotes (caso esteja usando)
+# Instala o uv para gerenciar pacotes (caso esteja usando)
 RUN pip install uv
 
 # Instala as dependências listadas no arquivo pyproject.toml

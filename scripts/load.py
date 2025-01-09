@@ -36,34 +36,34 @@ def process_files():
                 local_file_path = f"tmp/raw/{base_name}"
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
 
-                if "customers" in file_name:
-                    table_name = "customers"
-                elif "orders" in file_name:
-                    table_name = "orders"
-                elif "order_items" in file_name:
-                    table_name = "order_items"
-                elif "products" in file_name:
-                    table_name = "products"
-                elif "geolocation" in file_name:
-                    table_name = "geolocation"
-                elif "sellers" in file_name:
-                    table_name = "sellers"
-                elif "order_payments" in file_name:
-                    table_name = "order_payments"
-                elif "order_reviews" in file_name:
-                    table_name = "order_reviews"
-                elif "product_category_name_translation" in file_name:
-                    table_name = "product_category_name_translation"
-                else:
+                # Define mapping of file patterns to table names
+                table_mapping = {
+                    "customers": "customers",
+                    "orders": "orders",
+                    "order_items": "order_items",
+                    "products": "products",
+                    "geolocation": "geolocation",
+                    "sellers": "sellers",
+                    "order_payments": "order_payments",
+                    "order_reviews": "order_reviews",
+                    "product_category_name_translation": "product_category_name_translation"
+                }
+
+                # Find matching table name from file name
+                table_name = next((value for key, value in table_mapping.items() 
+                                 if key in file_name), None)
+                
+                if table_name is None:
                     logger.info(f"Skipping file {file_name} (not recognized)")
                     continue
 
                 logger.info(f"Table name: {table_name}")
-                # Download and process the file
+
+                # Download and load data to databse
                 s3.download_file(BUCKET_NAME, file_name, local_file_path)
                 logger.info(f"Downloaded {file_name}")
 
-                logger.info(f"Processing {file_name} to {table_name}")
+                logger.info(f"Loading {file_name} to {table_name}")
                 pd.read_csv(local_file_path).to_sql(table_name, engine, if_exists='append', index=False, schema='bronze')
 
                 
@@ -104,26 +104,23 @@ def upload_files_to_bucket(files: List[str], s3, bucket_path: str):
     for file in files:
         try:
             file_name = os.path.basename(file)
-            if "customers" in file_name:
-                folder = "customers"
-            elif "orders" in file_name:
-                folder = "orders"
-            elif "order_items" in file_name:
-                folder = "order_items"
-            elif "products" in file_name:
-                folder = "products"
-            elif "geolocation" in file_name:
-                folder = "geolocation"
-            elif "sellers" in file_name:
-                folder = "sellers"
-            elif "order_payments" in file_name:
-                folder = "order_payments"
-            elif "order_reviews" in file_name:
-                folder = "order_reviews"
-            elif "product_category_name_translation" in file_name:
-                folder = "product_category_name_translation"
-            else:
-                folder = "others"
+            
+            # Define mapping of file patterns to folder names
+            folder_mapping = {
+                "customers": "customers",
+                "orders": "orders",
+                "order_items": "order_items",
+                "products": "products",
+                "geolocation": "geolocation",
+                "sellers": "sellers",
+                "order_payments": "order_payments",
+                "order_reviews": "order_reviews",
+                "product_category_name_translation": "product_category_name_translation"
+            }
+
+            # Find matching folder name from file name
+            folder = next((value for key, value in folder_mapping.items() 
+                         if key in file_name), "others")
 
             logger.info(f'Starting upload file: {file_name} to folder: {folder}')
 
