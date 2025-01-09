@@ -1,6 +1,6 @@
 # Data Warehouse Olist Project
 
-![Project Architecture](./pics/architecture.png)
+![Project Architecture](./pics/arch.png)
 
 ## Overview
 
