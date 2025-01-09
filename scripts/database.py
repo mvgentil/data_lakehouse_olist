@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 
+from utils.logger_config import logger
+
 # Carregar variáveis de ambiente
 load_dotenv()
 DB_NAME = os.getenv("DB_NAME")
@@ -33,11 +35,11 @@ def create_database_if_not_exists():
             print(f"Database '{DB_NAME}' does not exist. Creating...")
             # Cria o banco de dados
             cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DB_NAME)))
-            print(f"Database '{DB_NAME}' created successfully.")
+            logger.info(f"Database '{DB_NAME}' created successfully.")
         else:
-            print(f"Database '{DB_NAME}' already exists.")
+            logger.info(f"Database '{DB_NAME}' already exists.")
     except Exception as e:
-        print(f"Error while checking/creating the database: {e}")
+        logger.error(f"Error while checking/creating the database: {e}")
     finally:
         if conn:
             conn.close()
@@ -46,13 +48,13 @@ def create_database_if_not_exists():
 def create_schema_and_table():
     try:
         with engine.connect() as connection:
-            print("Connected to the database successfully!")
+            logger.info("Connected to the database successfully!")
             
             # Criar o schema "bronze" se não existir
             connection.execute(text("CREATE SCHEMA IF NOT EXISTS bronze;"))
-            print("Schema 'bronze' created successfully or already exists.")
+            logger.info("Schema 'bronze' created successfully or already exists.")
     except Exception as e:
-        print(f"Error creating schema and table: {e}")
+        logger.error(f"Error creating schema and table: {e}")
         raise
 
 # Executa a verificação e criação do banco

@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.35.93",
     "kagglehub>=0.3.6",
+    "loguru>=0.7.3",
     "pandas>=2.2.3",
     "psycopg2-binary>=2.9.10",
     "pyarrow>=18.1.0",
