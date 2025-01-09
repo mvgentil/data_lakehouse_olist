@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from database import engine
 from extract import connect_to_s3, list_files
 from typing import List
-from sqlalchemy import text
 import pandas as pd
 
 load_dotenv()
@@ -16,17 +15,11 @@ BUCKET_NAME = os.getenv('BUCKET_NAME')
 # Configurações do S3
 s3 = connect_to_s3()
 
-def file_already_processed(file_name: str, connection) -> bool:
-    query = text("SELECT 1 FROM processed_files WHERE file_name  = :file_name;")
-    result = connection.execute(query, {"file_name": file_name}).fetchone()
-    return result is not None
-
-
 def process_files():
     with engine.begin() as connection:
 
         # List files in the S3 bucket
-        response = s3.list_objects_v2(Bucket=BUCKET_NAME)
+        response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix="raw/")
         
         for obj in response.get("Contents", []):
             file_name = obj["Key"]
@@ -34,10 +27,11 @@ def process_files():
                 print(f"Skipping empty file: {file_name}")
                 continue
 
-            # Check if the file is already processed
-            if not file_already_processed(file_name, connection):
+            if file_name.endswith(".csv"):
                 # Ensure the tmp/raw/ directory exists
-                local_file_path = f"tmp/raw/{file_name}"
+                base_name = os.path.basename(file_name)
+                print(f"Processing {file_name}")
+                local_file_path = f"tmp/raw/{base_name}"
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
 
                 if "customers" in file_name:
@@ -64,12 +58,25 @@ def process_files():
                 s3.download_file(BUCKET_NAME, file_name, local_file_path)
                 print(f"Downloaded {file_name}")
 
+                print(f"Processing {file_name} to {table_name}")
                 pd.read_csv(local_file_path).to_sql(table_name, engine, if_exists='append', index=False, schema='bronze')
-                print(f"Inserted {file_name} into {table_name}")
 
-                # TODO - Move file from bucket raw to bucket processed
+                
+                move_file_to_processed(file_name)
+
+                print(f"Processed {file_name}")
 
         print("File processing completed.")
+
+def move_file_to_processed(file_name: str):
+    base_name = os.path.basename(file_name)
+    s3.copy_object(
+        Bucket=BUCKET_NAME,
+        CopySource=f"{BUCKET_NAME}/{file_name}",
+        Key=f"processed/{base_name}"
+    )
+    s3.delete_object(Bucket=BUCKET_NAME, Key=file_name)
+    print(f"Moved {file_name} to processed folder")
 
 def transform_csv_to_parquet(files: List[str], s3):
     for file in files:
@@ -124,8 +131,10 @@ def upload_files_to_bucket(files: List[str], s3, bucket_path: str):
 
 def clear_files(path: str):
     files = list_files(path)
+    print("Removing files...")
     for file in files:
         os.remove(file)
+    print("Files removed from tmp folder.")
 
 
 if __name__ == "__main__":
