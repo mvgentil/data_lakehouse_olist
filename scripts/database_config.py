@@ -3,8 +3,12 @@ from psycopg2 import sql
 from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
+import sys
 
+sys.path.append('../')
 from utils.logger_config import logger
+
+
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -62,6 +66,7 @@ create_database_if_not_exists()
 
 # Cria a engine SQLAlchemy para o banco de dados
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
 engine = create_engine(DATABASE_URL)
 
 # Chamando a função para criar schema e tabela

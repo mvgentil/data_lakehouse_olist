@@ -1,10 +1,12 @@
 import os
 from dotenv import load_dotenv
-from database import engine
+from database_config import engine
 from extract import connect_to_s3, list_files
 from typing import List
 import pandas as pd
+import sys
 
+sys.path.append('../')
 from utils.logger_config import logger
 
 load_dotenv()
@@ -33,7 +35,7 @@ def process_files():
                 # Ensure the tmp/raw/ directory exists
                 base_name = os.path.basename(file_name)
                 logger.info(f"Processing {file_name}")
-                local_file_path = f"tmp/raw/{base_name}"
+                local_file_path = f"../tmp/raw/{base_name}"
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
 
                 # Define mapping of file patterns to table names
@@ -64,7 +66,7 @@ def process_files():
                 logger.info(f"Downloaded {file_name}")
 
                 logger.info(f"Loading {file_name} to {table_name}")
-                pd.read_csv(local_file_path).to_sql(table_name, engine, if_exists='append', index=False, schema='bronze')
+                pd.read_csv(local_file_path).to_sql(table_name, engine, if_exists='replace', index=False, schema='bronze')
 
                 
                 move_file_to_processed(file_name)
@@ -132,13 +134,17 @@ def upload_files_to_bucket(files: List[str], s3, bucket_path: str):
 
 def clear_files(path: str):
     files = list_files(path)
-    logger.info("Removing files...")
-    for file in files:
-        os.remove(file)
-    logger.info("Files removed from tmp folder.")
+    if len(files) == 0 or files is None:
+        logger.info("No files to remove.")
+    else:
+        logger.info(f"Files to remove: {len(files)}")
+        logger.info("Removing files...")
+        for file in files:
+            os.remove(file)
+        logger.info("Files removed from tmp folder.")
 
 
 if __name__ == "__main__":
 
     process_files()
-    clear_files("tmp/raw")
+    clear_files("../tmp/raw")

@@ -4,7 +4,9 @@ import boto3
 import kagglehub
 from typing import List
 import pandas as pd
+import sys
 
+sys.path.append('../')
 from utils.logger_config import logger
 
 load_dotenv()
@@ -106,7 +108,7 @@ if __name__ == "__main__":
     files = list_files(path)
 
     # Connect to S3
-    s3 = connect_to_s3()
+    #s3 = connect_to_s3()
 
     # Upload files to S3
-    upload_files_to_bucket(files, s3, bucket_path="raw")
+    #upload_files_to_bucket(files, s3, bucket_path="raw")
