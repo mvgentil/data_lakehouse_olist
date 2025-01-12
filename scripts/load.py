@@ -4,9 +4,7 @@ from database_config import engine
 from extract import connect_to_s3, list_files
 from typing import List
 import pandas as pd
-import sys
 
-sys.path.append('../')
 from utils.logger_config import logger
 
 load_dotenv()

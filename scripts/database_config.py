@@ -3,11 +3,8 @@ from psycopg2 import sql
 from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
-import sys
 
-sys.path.append('../')
 from utils.logger_config import logger
-
 
 
 # Carregar variáveis de ambiente
