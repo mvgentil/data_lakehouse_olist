@@ -1,8 +1,8 @@
-version: '3.9'
 services:
+
   postgres:
-    image: postgres:15
-    container_name: postgres_container
+    image: postgres:latest
+    container_name: db_olist
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -10,34 +10,67 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgresql_bin:/usr/lib/postgresql
+      - postgresql_data:/var/lib/postgresql/data
+    networks:
+      - olist_network
 
-  airflow:
-    image: apache/airflow:2.7.2
-    container_name: airflow_container
-    ports:
-      - "8080:8080"
+  pgadmin:
+    container_name: pgadmin_olist
+    image: dpage/pgadmin4
     environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+      PGADMIN_DEFAULT_PASSWORD: postgres
+      PGADMIN_LISTEN_PORT: 5050
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
     volumes:
-      - ./dags:/opt/airflow/dags
-    depends_on:
-      - postgres
-
-  app:
+      - postgresql_bin:/usr/lib/postgresql
+      - pgadmin_root_prefs:/root/.pgadmin
+      - pgadmin_working_dir:/var/lib/pgadmin
+      - ./files:/files
+    ports:
+      - 5050:5050
+    networks:
+      - olist_network
+    
+  dbt-core:
+    container_name: dbt-core
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=55432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=olist
+      DBT_PROFILES_DIR: /olist
+      DB_HOST: db_olist
+      DB_PORT: 5432
+      DB_NAME: olist
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_SCHEMA_DEV: public
+      DB_THREADS_DEV: 1
+      DB_TYPE_DEV: postgres
     volumes:
-      - ./scripts:/app/scripts
+      - .:/usr/app
+      - ./dbt/target:/usr/app/dbt/target
+      - ./profiles.yml:/olist/profiles.yml
+    ports:
+      - 8081:8081
     depends_on:
       - postgres
+    networks:
+      - olist_network
+
+networks:
+  olist_network:
+    driver: bridge
 
 volumes:
-  postgres_data:
+  pgadmin_root_prefs:
+    driver: local
+  pgadmin_working_dir:
+    driver: local
+  postgresql_data:
+    driver: local
+  postgresql_bin:
+    driver: local
